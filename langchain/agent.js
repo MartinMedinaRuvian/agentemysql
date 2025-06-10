@@ -32,13 +32,12 @@ async function main() {
 
   const llm = new ChatOllama({
     model: "gemma3:12b",
-    baseUrl: "http://localhost:11434",
-    temperature: 0.0,
+    baseUrl: "http://localhost:11434"
   });
 
   const prompt = `
-Convierte la pregunta en una consulta MySQL.
-Sin explicar. Usa el esquema:
+Convierte la pregunta en una consulta Mysql (MariaDB)
+Sin explicar. Usa como contexto el esquema:
 ${schema}
 Pregunta:
 ${preguntaIngresada}
@@ -49,7 +48,7 @@ ${preguntaIngresada}
   console.timeEnd("🧠 Tiempo generación SQL");
 
   const rawContent = response.content.trim();
-  console.log(response, "respuesta agent martin");
+  //console.log(response, "respuesta agent martin");
 
   const match = rawContent.match(/SELECT[\s\S]+?;/i);
   const sql = match ? match[0].trim() : "NO_QUERY";
