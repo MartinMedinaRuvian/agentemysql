@@ -9,7 +9,7 @@ app.post('/query', async (req, res) => {
   const { query, params = [] } = req.body;
   try {
     const result = await mcp.executeCustomQuery({ query, params });
-    res.json({ result: result.content[0].text });
+    res.json({ result: result.content[0].json });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

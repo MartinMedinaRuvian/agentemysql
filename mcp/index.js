@@ -25,7 +25,7 @@ class MySQLMCPServer {
       queueLimit: 0,
     });
     const conn = await this.pool.getConnection();
-    console.log('✅ MySQL conectado correctamente');
+    console.log('✅ MySQL conectado correctamente - MPC');
     conn.release();
   }
 
@@ -68,55 +68,96 @@ class MySQLMCPServer {
     });
   }
 
-  async executeCustomQuery({ query, params = [] }) {
-    const trimmed = query.trim().toLowerCase();
-    let querySearch = trimmed
-    if (trimmed.includes(':')){
-      querySearch = trimmed.split(':')[1].trim()
-    }
-    const blocked = ['drop', 'delete', 'update', 'insert', 'alter', 'create', 'truncate'];
-    if (!querySearch.startsWith('select')) throw new Error('Only SELECT queries are allowed');
-    if (blocked.some(k => querySearch.includes(k))) throw new Error('Query contains dangerous keywords');
+async executeCustomQuery({ query, params = [] }) {
+  const trimmed = query.trim().toLowerCase();
+  let querySearch = trimmed;
+  if (trimmed.includes(':')) {
+    querySearch = trimmed.split(':')[1].trim();
+  }
 
+  const blocked = ['drop', 'delete', 'update', 'insert', 'alter', 'create', 'truncate'];
+  if (!querySearch.startsWith('select')) throw new Error('Only SELECT queries are allowed');
+  if (blocked.some(k => querySearch.includes(k))) throw new Error('Query contains dangerous keywords');
+
+  try {
     const [rows] = await this.pool.execute(querySearch, params);
     return {
-      content: [
-        {
-          type: 'text',
-          text: `${this.formatResults(rows)}`,
-        },
-      ],
+      content: [{ type: 'json', json: rows }],
     };
+  } catch (err) {
+    if (
+      err.message.includes('Illegal mix of collations') &&
+      !querySearch.includes('COLLATE')
+    ) {
+      // Aplica COLLATE a comparaciones comunes (=, LIKE, IN)
+      let fixedQuery = querySearch;
+
+      // Para comparaciones con "="
+      fixedQuery = fixedQuery.replace(
+        /(\w+)\s*=\s*(\w+)/g,
+        (_, left, right) =>
+          `CONVERT(${left} USING utf8) COLLATE utf8_general_ci = CONVERT(${right} USING utf8) COLLATE utf8_general_ci`
+      );
+
+      // Para comparaciones con LIKE
+      fixedQuery = fixedQuery.replace(
+        /(\w+)\s+LIKE\s+('[^']*')/gi,
+        (_, column, value) =>
+          `CONVERT(${column} USING utf8) COLLATE utf8_general_ci LIKE ${value}`
+      );
+
+      // Para expresiones IN ('a', 'b')
+      fixedQuery = fixedQuery.replace(
+        /(\w+)\s+IN\s+\(([^)]+)\)/gi,
+        (_, column, values) =>
+          `CONVERT(${column} USING utf8) COLLATE utf8_general_ci IN (${values})`
+      );
+
+      try {
+        const [fixedRows] = await this.pool.execute(fixedQuery, params);
+        return {
+          content: [{ type: 'json', json: fixedRows }],
+        };
+      } catch (e2) {
+        throw new Error(
+          `Original error: ${err.message}\nWhile retrying: ${e2.message}\nQuery: ${fixedQuery}`
+        );
+      }
+    } else {
+      throw err;
+    }
   }
-
-formatResults(rows) {
-  if (!rows.length) return 'No results.';
-
-  const headers = Object.keys(rows[0]);
-
-  // Si solo hay una fila y una columna, retorna el valor directo
-  if (rows.length === 1 && headers.length === 1) {
-    const val = rows[0][headers[0]];
-    return val === null
-      ? 'NULL'
-      : val instanceof Date
-      ? val.toISOString().split('T')[0]
-      : String(val);
-  }
-
-  // Caso general: tabla formateada
-  const table = [
-    headers.join(' | '),
-    headers.map(() => '---').join(' | '),
-    ...rows.map(row =>
-      headers.map(h => {
-        const val = row[h];
-        return val === null ? 'NULL' : val instanceof Date ? val.toISOString().split('T')[0] : String(val);
-      }).join(' | ')
-    ),
-  ];
-  return table.join('\n');
 }
+
+
+  formatResults(rows) {
+    if (!rows.length) return 'No results.';
+
+    const headers = Object.keys(rows[0]);
+
+    // Si solo hay una fila y una columna, retorna el valor directo
+    if (rows.length === 1 && headers.length === 1) {
+      const val = rows[0][headers[0]];
+      return val === null
+        ? 'NULL'
+        : val instanceof Date
+          ? val.toISOString().split('T')[0]
+          : String(val);
+    }
+
+    // Caso general: tabla formateada
+    const table = [
+      headers.join(' | '),
+      headers.map(() => '---').join(' | '),
+      ...rows.map(row =>
+        headers.map(h => {
+          const val = row[h];
+          return val === null ? 'NULL' : val instanceof Date ? val.toISOString().split('T')[0] : String(val);
+        }).join(' | ')
+      ),
+    ];
+    return table.join('\n');
+  }
 
   async start() {
     const transport = new StdioServerTransport();

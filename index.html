@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Generador SQL MARTIN</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    textarea {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      font-size: 1em;
+      margin-bottom: 10px;
+    }
+
+    button {
+      padding: 5px 15px;
+      font-size: 1em;
+      margin-bottom: 20px;
+      cursor: pointer;
+    }
+
+    pre {
+      background-color: #f4f4f4;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h3>Conversión de preguntas a SQL - Mi primer Agente IA ❤️🤖</h3>
+
+  <textarea id="pregunta" placeholder="Escribe tu pregunta aquí" rows="5"></textarea> <br>
+  <button onclick="enviarPregunta()">Enviar</button>
+
+  <h5>Consulta generada:</h5>
+  <pre id="consulta"></pre>
+
+  <h5>Resultado de la consulta:</h5>
+  <pre id="resultado"></pre>
+
+  <script>
+    async function enviarPregunta() {
+      const pregunta = document.getElementById("pregunta").value;
+      const consultaEl = document.getElementById("consulta");
+      const resultadoEl = document.getElementById("resultado");
+
+      consultaEl.textContent = "Generando...";
+      resultadoEl.textContent = "";
+
+      try {
+        const res = await fetch("http://localhost:5000/api/generar-sql", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ pregunta })
+        });
+
+        const data = await res.json();
+        consultaEl.textContent = data.sql || "❌ No se generó SQL";
+
+        resultadoEl.textContent = JSON.stringify(data.resultado, null, 2);
+      } catch (err) {
+        consultaEl.textContent = "Error al conectar con el backend.";
+        resultadoEl.textContent = "No se pudo obtener el resultado.";
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
