@@ -28,7 +28,9 @@ DB_PASSWORD=password_db
 DB_NAME=nombre_db
 
 ## ▶️ Ejecución
-Ejecuta todos los scripts .bat en el orden especificado en sus nombres.
+
+### 1️⃣ Ejecuta todos los scripts .bat en el orden especificado en sus nombres.
+### 2️⃣ Abrir el archivo index.html
 
 ## 👨‍💻 Autor
 Martin Medina Ruvian [martindjmedina.com](https://martindjmedina.com/)
