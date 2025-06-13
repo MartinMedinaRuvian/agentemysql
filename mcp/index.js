@@ -68,16 +68,51 @@ class MySQLMCPServer {
     });
   }
 
+
+fixCollationConflicts(query, collation = 'utf8_spanish_ci') {
+  let fixed = query;
+
+  // Comparaciones de igualdad entre columnas
+  fixed = fixed.replace(
+    /([a-z_]+\.[a-z_]+)\s*=\s*([a-z_]+\.[a-z_]+)/gi,
+    (_, left, right) =>
+      `CONVERT(${left} USING utf8) COLLATE ${collation} = CONVERT(${right} USING utf8) COLLATE ${collation}`
+  );
+
+  // Comparaciones LIKE con strings
+  fixed = fixed.replace(
+    /([a-z_]+\.[a-z_]+)\s+LIKE\s+('[^']*')/gi,
+    (_, column, value) =>
+      `CONVERT(${column} USING utf8) COLLATE ${collation} LIKE ${value}`
+  );
+
+  // Comparaciones IN (...)
+  fixed = fixed.replace(
+    /([a-z_]+\.[a-z_]+)\s+IN\s+\(([^)]+)\)/gi,
+    (_, column, values) =>
+      `CONVERT(${column} USING utf8) COLLATE ${collation} IN (${values})`
+  );
+
+  return fixed;
+}
+
 async executeCustomQuery({ query, params = [] }) {
+  const defaultCollation = 'utf8_spanish_ci';
+
   const trimmed = query.trim().toLowerCase();
   let querySearch = trimmed;
+
   if (trimmed.includes(':')) {
     querySearch = trimmed.split(':')[1].trim();
   }
 
   const blocked = ['drop', 'delete', 'update', 'insert', 'alter', 'create', 'truncate'];
-  if (!querySearch.startsWith('select')) throw new Error('Only SELECT queries are allowed');
-  if (blocked.some(k => querySearch.includes(k))) throw new Error('Query contains dangerous keywords');
+  if (!querySearch.startsWith('select')) {
+    throw new Error('Only SELECT queries are allowed');
+  }
+  if (blocked.some(k => querySearch.includes(k))) {
+    throw new Error('Query contains dangerous keywords');
+  }
 
   try {
     const [rows] = await this.pool.execute(querySearch, params);
@@ -89,29 +124,7 @@ async executeCustomQuery({ query, params = [] }) {
       err.message.includes('Illegal mix of collations') &&
       !querySearch.includes('COLLATE')
     ) {
-      // Aplica COLLATE a comparaciones comunes (=, LIKE, IN)
-      let fixedQuery = querySearch;
-
-      // Para comparaciones con "="
-      fixedQuery = fixedQuery.replace(
-        /(\w+)\s*=\s*(\w+)/g,
-        (_, left, right) =>
-          `CONVERT(${left} USING utf8) COLLATE utf8_general_ci = CONVERT(${right} USING utf8) COLLATE utf8_general_ci`
-      );
-
-      // Para comparaciones con LIKE
-      fixedQuery = fixedQuery.replace(
-        /(\w+)\s+LIKE\s+('[^']*')/gi,
-        (_, column, value) =>
-          `CONVERT(${column} USING utf8) COLLATE utf8_general_ci LIKE ${value}`
-      );
-
-      // Para expresiones IN ('a', 'b')
-      fixedQuery = fixedQuery.replace(
-        /(\w+)\s+IN\s+\(([^)]+)\)/gi,
-        (_, column, values) =>
-          `CONVERT(${column} USING utf8) COLLATE utf8_general_ci IN (${values})`
-      );
+      const fixedQuery = this.fixCollationConflicts(querySearch, defaultCollation);
 
       try {
         const [fixedRows] = await this.pool.execute(fixedQuery, params);
@@ -120,7 +133,7 @@ async executeCustomQuery({ query, params = [] }) {
         };
       } catch (e2) {
         throw new Error(
-          `Original error: ${err.message}\nWhile retrying: ${e2.message}\nQuery: ${fixedQuery}`
+          `Original error: ${err.message}\nWhile retrying: ${e2.message}\nFixed Query: ${fixedQuery}`
         );
       }
     } else {
@@ -128,6 +141,8 @@ async executeCustomQuery({ query, params = [] }) {
     }
   }
 }
+
+
 
 
   formatResults(rows) {
