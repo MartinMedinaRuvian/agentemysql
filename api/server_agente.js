@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { ChatOllama } from "@langchain/ollama";
 import { queryDbTool } from "../langchain/tools.js";
-import { getDatabaseSchema } from "../langchain/getSchema.js";
+import { getDatabaseSchema } from "../util/getSchema.js";
 
 const app = express();
 const PORT = 5000;
