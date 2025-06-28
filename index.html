@@ -1,46 +1,112 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8" />
   <title>Generador SQL MARTIN</title>
   <style>
+    :root {
+      --primario: #4A90E2;
+      --fondo: #f9f9f9;
+      --texto: #333;
+      --borde: #ddd;
+      --gris-suave: #f0f0f0;
+    }
+
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--fondo);
       padding: 20px;
       max-width: 800px;
       margin: auto;
+      color: var(--texto);
     }
 
-    textarea {
+    h3 {
+      color: var(--primario);
+      margin-bottom: 20px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 15px;
+      margin-bottom: 5px;
+    }
+
+    textarea,
+    select {
       width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
       font-size: 1em;
+      padding: 10px;
+      border: 1px solid var(--borde);
+      border-radius: 8px;
+      background-color: white;
       margin-bottom: 10px;
     }
 
     button {
-      padding: 5px 15px;
+      padding: 10px 20px;
       font-size: 1em;
-      margin-bottom: 20px;
+      background-color: var(--primario);
+      color: white;
+      border: none;
+      border-radius: 8px;
       cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #3c78c2;
     }
 
     pre {
-      background-color: #f4f4f4;
-      padding: 10px;
-      border-radius: 5px;
+      background-color: var(--gris-suave);
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid var(--borde);
       overflow-x: auto;
       white-space: pre-wrap;
       word-wrap: break-word;
     }
+
+    h5 {
+      margin-top: 25px;
+      color: #555;
+    }
+
+    .spinner {
+      margin-top: 10px;
+      width: 30px;
+      height: 30px;
+      border: 6px solid #ccc;
+      border-top: 6px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   </style>
 </head>
+
 <body>
   <h3>Conversión de preguntas a SQL - Mi primer Agente IA ❤️🤖</h3>
 
-  <textarea id="pregunta" placeholder="Escribe tu pregunta aquí" rows="5"></textarea> <br>
-  <button onclick="enviarPregunta()">Enviar</button>
+  <label for="modelo">Selecciona un modelo:</label>
+  <select id="modelo">
+    <option>Cargando modelos...</option>
+  </select>
+
+  <label for="pregunta">¿Qué desea hacer o preguntar?</label>
+  <textarea id="pregunta" placeholder="Escribe tu pregunta aquí" rows="5"></textarea>
+
+  <button onclick="enviarPregunta()" id="btnenviar">Enviar</button>
+
+  <span id="spinner" class="spinner"></span>
 
   <h5>Consulta generada:</h5>
   <pre id="consulta"></pre>
@@ -49,11 +115,47 @@
   <pre id="resultado"></pre>
 
   <script>
+    document.getElementById('spinner').style.display = 'none';
+
+    async function cargarModelos() {
+      const selectEl = document.getElementById("modelo");
+      try {
+        const res = await fetch("http://localhost:5000/api/modelos");
+        const data = await res.json();
+
+        selectEl.innerHTML = "";
+
+        const lineas = data.modelos.trim().split("\n");
+
+        for (let i = 1; i < lineas.length; i++) {
+          const nombreModelo = lineas[i].split(/\s+/)[0];
+          const option = document.createElement("option");
+          option.value = nombreModelo;
+          option.textContent = nombreModelo;
+          selectEl.appendChild(option);
+        }
+
+        if (selectEl.options.length === 0) {
+          selectEl.innerHTML = '<option>No hay modelos disponibles</option>';
+        }
+
+      } catch (err) {
+        console.error(err);
+        selectEl.innerHTML = '<option>Error al cargar modelos</option>';
+      }
+    }
+
+
     async function enviarPregunta() {
       const pregunta = document.getElementById("pregunta").value;
       const consultaEl = document.getElementById("consulta");
       const resultadoEl = document.getElementById("resultado");
+      const modelo = document.getElementById("modelo").value;
 
+      document.getElementById("btnenviar").disabled = true
+      document.getElementById("btnenviar").textContent = 'Cargando...'
+
+      document.getElementById('spinner').style.display = 'block';
       consultaEl.textContent = "Generando...";
       resultadoEl.textContent = "";
 
@@ -63,19 +165,26 @@
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ pregunta })
+          body: JSON.stringify({ modelo, pregunta })
         });
 
         const data = await res.json();
         consultaEl.textContent = data.sql || "❌ No se generó SQL";
-
         resultadoEl.textContent = JSON.stringify(data.resultado, null, 2);
+        document.getElementById("btnenviar").disabled = false
+        document.getElementById("btnenviar").textContent = 'Enviar'
+        document.getElementById('spinner').style.display = 'none';
       } catch (err) {
         consultaEl.textContent = "Error al conectar con el backend.";
         resultadoEl.textContent = "No se pudo obtener el resultado.";
+        document.getElementById("btnenviar").disabled = false
+        document.getElementById("btnenviar").textContent = 'Enviar'
         console.error(err);
       }
     }
+
+    window.addEventListener("DOMContentLoaded", cargarModelos);
   </script>
 </body>
+
 </html>
